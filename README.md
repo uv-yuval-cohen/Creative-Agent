@@ -1,6 +1,6 @@
 # Multi-Agent Creative Ideation Orchestrator
 
-A sophisticated AI orchestrator system that uses specialized Claude agents to iteratively develop and refine creative project ideas through structured, intelligent collaboration.
+An AI orchestrator system that uses specialized Claude agents to iteratively develop and refine creative project ideas through structured, intelligent collaboration.
 
 ## 🎯 Overview
 
