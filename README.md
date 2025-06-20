@@ -18,7 +18,7 @@ This system creates a dynamic, multi-agent workflow where an orchestrator Claude
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │ Strategic Plans │    │ Intelligent      │    │ Specialized     │
 │ Agent Selection │    │ Summarization    │    │ Agents:         │
-│ Iteration Logic │    │ Emotion Enhancement│   │ • Researcher    │
+│ Iteration Logic │    │EmotionEnhancement│    │ • Researcher    │
 └─────────────────┘    │ Analytics        │    │ • Engineer      │
                        └──────────────────┘    │ • Emotion       │
                                                └─────────────────┘
