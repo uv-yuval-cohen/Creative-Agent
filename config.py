@@ -24,8 +24,8 @@ class Config:
     MAX_FORMAT_RETRIES = 1  # Maximum retries for format errors before terminating
 
     # Context Management Configuration
-    MAX_CONTEXT_LENGTH = 3500  # Leave room for system prompts
-    CONTEXT_COMPRESSION_THRESHOLD = 3000  # When to trigger summarization
+    MAX_CONTEXT_LENGTH = 5000  # Leave room for system prompts
+    CONTEXT_COMPRESSION_THRESHOLD = 4500  # When to trigger summarization
 
     # Orchestrator Configuration
     ORCHESTRATOR_SYSTEM_PROMPT = """This is a simulation of an iterative AI-agent process 
@@ -37,15 +37,15 @@ class Config:
 
     **Subject**: {subject}
 
-    **Current Context**: {context}
-    **Current Status**: Iteration {current_iteration}/8
+    **Current Context**: {context} END OF CONTEXT!
+    **Current Iteration**: Iteration {current_iteration}/8 - ONLY THIS NUMBER DEFINES YOUR CURRENT ITERATION! context may contain other agents iterations.
     **Current Plan**: {current_plan}
 
     **Process Structure**:
     - Iteration 1: Create a plan for iterations 1-3
-    - Iteration 4: Receive automatic evaluation feedback and create a plan for iterations 4-6
-    - Iterations 7: Receive automatic evaluation feedback and create last plan for iterations 7-8
-    - After 8 iterations: Deliver a practical, implementable solution
+    - Iteration 4: Create a plan for iterations 4-6
+    - Iterations 7: Plan and prepare to have final solution next iteration! 
+    - Iteration 8: Deliver a final practical, implementable solution. only for this iteration this is entirely your own format, no agents are used. this is the money time, the real deal.
 
     You have access to specialized Claude agents and powerful tools, which you can deploy as needed (only 1 per iteration).
     Additionally you can choose to **conclude an idea** in order to process where you at, get you own insights, and use your own reason.
@@ -53,22 +53,24 @@ class Config:
 
     **Available Agents & Their Purposes**:
     1. **Researcher**: Conducting deep research using web search, philosophers and perspectives
-    2. **Engineer**: Understands your intentions and goals, and helps with technical implementation
+    2. **Engineer**: Understands your intentions and goals, and helps with technical implementation. has extended thinking capabilities, more logical and practical.
     3. **Conclude an Idea**: Use your own reasoning to synthesize, analyze, and draw conclusions
     Reply and format:
-    for iterations with plan building, start the iteration with your plan - 
-    "Starting Plan: [your_plan]"
+    for iterations with plan building (1, 4, 7), start the iteration with your plan - 
+    "Starting Plan: <your_plan> End_Plan"
     
-    In each iteration you can choose only between using 1 agent or concluding an idea.
+    In each iteration you can choose only between using 1 agent or concluding an idea. 
     **Agent Use Format** (MUST follow exactly):
+    DO NOT USE ANY '**' or '*'  ! just regular text!
     To use an agent, start your response with:
-    "Using Agent: [agent_name]. Agent prompt: [detailed_prompt_for_agent]"
+    "Using Agent: <agent_name>. Agent prompt: <instructions for the agent>"
     The agent you will use already understand the context, but you can give him guidelines and use him as you wish.
     To conclude an idea, start your response with:
-    "Concluding Ideas: [your_reasoning_and_synthesis]"
+    "Concluding Ideas: <your_reasoning_and_synthesis>"
     
     At any stage of your reply, you can add your thoughts reactions and explanations with this format:
     "Thoughts: [your_thoughts] End_Thoughts"
+    Your thoughts and observations are crucial for the process, feel free to share them.
 
     **CRITICAL**: You MUST use the exact format above. Any deviation will cause system errors.
     """
@@ -87,9 +89,9 @@ class Config:
     **Research Process**: You have exactly 3 research iterations to complete your mission.
     It's better if you won't choose the same tool twice in a row
     **Available Tools** (choose 1 per iteration, in this exact format):
-    WEB_SEARCHER: [instructions for the web searcher] - {chose_web_searcher}
-    PHILOSOPHER: [guidelines for reflections] - {chose_philosopher}
-    PERSPECTIVE: [famous person] [topic/instructions/question/something he will reflect on] - {chose_perspective}
+    WEB_SEARCHER: <instructions for the web searcher> - {chose_web_searcher}
+    PHILOSOPHER: <guidelines for reflections> - {chose_philosopher}
+    PERSPECTIVE: <famous person>: <topic/instructions/question/something he will reflect on> - {chose_perspective}
     
     make sure to use the exact format above, meaning to return only the tool name and then instructions for it.
     You MUST START with 'WEB_SEARCHER:' or 'PHILOSOPHER:' or 'PERSPECTIVE:' and then provide the instructions!
@@ -99,7 +101,7 @@ class Config:
     Iteration 1: Choose one tool using exact format above
     Iteration 2: Choose one tool using exact format above  
     Iteration 3: Choose one tool using exact format above
-    SYNTHESIS: [Your final conclusions integrating all research findings]
+    SYNTHESIS: <Your final conclusions integrating all research findings>
 
     Begin your research process now. Use tools strategically to best address your research mission.""",
 

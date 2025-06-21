@@ -136,8 +136,9 @@ def validate_api_response(response: Any) -> bool:
         return False
 
 
-def extract_text_from_response(response: Any) -> str:
-    """Extract text content from API response including tool usage results"""
+def extract_text_from_response(response: Any, agent_name: str = "unknown", iteration: int = None,
+                               not_context: bool = True, session_dir: str = 'session_dir') -> str:
+    """Extract text content from API response including tool usage results and log to file"""
     try:
         if not response:
             logging.warning("Empty response provided to extract_text_from_response")
@@ -153,30 +154,93 @@ def extract_text_from_response(response: Any) -> str:
                     if hasattr(content_block, 'type'):
                         if content_block.type == 'text' and hasattr(content_block, 'text'):
                             text_parts.append(content_block.text)
+                        elif content_block.type == 'thinking' and hasattr(content_block, 'thinking'):
+                            # Claude 4: Log thinking but don't include in response
+                            # (thinking is typically summarized, not full reasoning)
+                            logging.info("Thinking block detected (summarized reasoning)")
+                        elif content_block.type == 'redacted_thinking':
+                            # Claude 4: Handle encrypted thinking blocks
+                            logging.info("Redacted thinking block detected (encrypted reasoning)")
                         elif content_block.type == 'tool_use':
                             # Log tool usage but don't include in response
                             logging.info(f"Tool used: {getattr(content_block, 'name', 'unknown')}")
                     elif hasattr(content_block, 'text'):
+                        # Extract text attribute directly
                         text_parts.append(content_block.text)
+                    elif hasattr(content_block, 'thinking'):
+                        # Handle direct thinking attribute
+                        logging.info("Direct thinking attribute detected")
                     else:
-                        text_parts.append(str(content_block))
+                        # Only use string conversion as last resort and log it
+                        logging.debug(f"Unknown content block type, converting to string: {type(content_block)}")
+                        # Don't add unknown blocks to avoid object representations
+                        pass
 
-                return '\n'.join(text_parts) if text_parts else ""
+                extracted_text = '\n'.join(text_parts) if text_parts else ""
 
-            return str(response.content)
+            else:
+                # Handle single content object
+                if hasattr(response.content, 'text'):
+                    extracted_text = response.content.text
+                elif hasattr(response.content, 'content') and isinstance(response.content.content, str):
+                    extracted_text = response.content.content
+                else:
+                    extracted_text = str(response.content)
+        elif hasattr(response, 'message'):
+            extracted_text = str(response.message)
+        else:
+            # Fallback
+            extracted_text = str(response)
 
-        if hasattr(response, 'message'):
-            return str(response.message)
-
-        # Fallback
-        return str(response)
+        # Log the extracted text to file before returning
+        _log_response_to_file(extracted_text, agent_name, iteration, not_context, session_dir)
+        return extracted_text
 
     except Exception as e:
         logging.error(f"Failed to extract text from response: {e}")
         return ""
 
 
-def validate_agent_response_format(response_text: str, agent_type = 'orchestrator') -> Tuple[bool, Optional[str], Optional[Dict[str, str]]]:
+def _log_response_to_file(text: str, agent_name: str, iteration: int, not_context: bool = True, session_dir: str = 'session_dir') -> None:
+    """Log response text to a consolidated file with organized formatting"""
+    try:
+        import os
+        from datetime import datetime
+
+        # Create logs directory if it doesn't exist
+        log_dir = "response_logs"
+        os.makedirs(os.path.join(session_dir, log_dir), exist_ok=True)
+
+        if not_context:
+            log_file = os.path.join(session_dir, log_dir, f"agent_responses.txt")
+        else:
+            log_file = os.path.join(session_dir, log_dir, f"context_agent_responses.txt")
+
+        # Format the entry
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        separator = "=" * 80
+        iteration_info = f" (Iteration {iteration})" if iteration is not None else ""
+        agent_type = "AGENT" if not_context else "CONTEXT AGENT"
+
+        header = f"\n{separator}\n"
+        header += f"{agent_type}: {agent_name.upper()}{iteration_info}\n"
+        header += f"TIMESTAMP: {timestamp}\n"
+        header += f"{separator}\n"
+
+        # Append to file
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(header)
+            f.write(text)
+            f.write(f"\n{separator}\n")
+
+        logging.info(f"Response logged to {log_file}")
+
+    except Exception as e:
+        logging.error(f"Failed to log response to file: {e}")
+
+
+def validate_agent_response_format(response_text: str, agent_type='orchestrator') -> Tuple[
+    bool, Optional[str], Optional[Dict[str, str]]]:
     """
     Validate orchestrator response format for agent usage
     Returns: (is_valid, error_message, parsed_data)
@@ -193,7 +257,57 @@ def validate_agent_response_format(response_text: str, agent_type = 'orchestrato
         response_text = response_text.strip()
 
         if agent_type == 'orchestrator':
-            # Check for "Using Agent:" format
+            # Check for "Starting Plan:" format (for iterations 1, 4, 7)
+            plan_pattern = r"Starting Plan:\s*(.+?)\s*End_Plan"
+            plan_match = re.search(plan_pattern, response_text, re.DOTALL | re.IGNORECASE)
+            if plan_match:
+                plan_content = plan_match.group(1).strip()
+
+                # After extracting the plan, check what comes next
+                # Remove the plan section and check the remaining text
+                remaining_text = re.sub(plan_pattern, "", response_text, flags=re.DOTALL | re.IGNORECASE).strip()
+                remaining_text = remove_thoughts_sections(remaining_text)
+
+                if not remaining_text:
+                    # Only plan, no agent usage or conclusion
+                    return True, None, {
+                        'plan': plan_content
+                    }
+
+                # Check if there's an agent usage after the plan
+                agent_pattern = r"Using Agent:\s*(\w+)\.\s*Agent prompt:\s*(.+)"
+                agent_match = re.search(agent_pattern, remaining_text, re.DOTALL | re.IGNORECASE)
+                if agent_match:
+                    agent_name = agent_match.group(1).lower()
+                    agent_prompt_raw = agent_match.group(2).strip()
+                    agent_prompt = remove_thoughts_sections(agent_prompt_raw)
+
+                    valid_agents = ['researcher', 'engineer']
+                    if agent_name not in valid_agents:
+                        return False, f"Invalid agent name: {agent_name}. Valid agents: {valid_agents}", None
+
+                    return True, None, {
+                        'type': 'agent',
+                        'plan': plan_content,
+                        'agent_name': agent_name,
+                        'agent_prompt': agent_prompt
+                    }
+
+                # Check if there's a conclusion after the plan
+                conclude_pattern = r"Concluding Ideas:\s*(.+)"
+                conclude_match = re.search(conclude_pattern, remaining_text, re.DOTALL | re.IGNORECASE)
+                if conclude_match:
+                    reasoning = conclude_match.group(1).strip()
+                    return True, None, {
+                        'type': 'conclude',
+                        'plan': plan_content,
+                        'reasoning': reasoning
+                    }
+
+                # Plan exists but no valid follow-up action
+                return False, "After 'Starting Plan', response must include either 'Using Agent:' or 'Concluding Ideas:'", None
+
+            # Check for "Using Agent:" format (without plan)
             agent_pattern = r"Using Agent:\s*(\w+)\.\s*Agent prompt:\s*(.+)"
             agent_match = re.search(agent_pattern, response_text, re.DOTALL | re.IGNORECASE)
             if agent_match:
@@ -211,7 +325,7 @@ def validate_agent_response_format(response_text: str, agent_type = 'orchestrato
                     'agent_prompt': agent_prompt
                 }
 
-            # Check for "Concluding Ideas:" format
+            # Check for "Concluding Ideas:" format (without plan)
             conclude_pattern = r"Concluding Ideas:\s*(.+)"
             conclude_match = re.search(conclude_pattern, response_text, re.DOTALL | re.IGNORECASE)
             if conclude_match:
@@ -221,7 +335,7 @@ def validate_agent_response_format(response_text: str, agent_type = 'orchestrato
                     'reasoning': reasoning
                 }
 
-            return False, "Response must start with either 'Using Agent: [name]. Agent prompt: [prompt]' or 'Concluding Ideas: [reasoning]'", None
+            return False, "Response must start with 'Starting Plan:' (for iterations 1,4,7) or contain 'Using Agent: [name]. Agent prompt: [prompt]' or 'Concluding Ideas: [reasoning]'", None
 
         elif agent_type == 'researcher':
             # Check for "WEB_SEARCHER:" format

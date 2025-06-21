@@ -16,7 +16,13 @@ def run_orchestrator_flow(session_dir):
     print("Executing LLM Orchestrator and Context Flow")
     print("=" * 60)
 
-    subject = "I need a creative idea for a project in course about 3D representations and generations with machine learning"
+    subject = """ Your goal is to advance the math community and researchers.
+    It can be a new theorem, a proof, a counterexample, or a new technique.
+    It can be a new definition or use of an existing definition.
+    It can be solution to an open problem, or a new open problem.
+    As long as its clear, logical, and mathematically sound, it is valid.
+    Its better if it is original, with significant novelty or insight to the field.
+    """
 
     print(f"Subject: {subject}")
     print(f"Session Directory: {session_dir}")
@@ -52,45 +58,45 @@ def run_orchestrator_flow(session_dir):
         print("Response preview:")
         print(f"   {orchestrator_response[:200]}...")
 
-        # Get context before adding this iteration
-        context_before = context_manager.context
-        context_before_length = len(context_before)
-
-        # Add to context manager (triggers: summarize → emotion → append)
-        print("\nProcessing through Context Manager...")
-        print("   Step 1: Summarizing orchestrator response...")
-        print("   Step 2: Adding emotional enhancement...")
-        print("   Step 3: Appending to context...")
-
-        context_success = context_manager.add_iteration_result(
-            iteration_num=iteration,
-            response=orchestrator_response,
-            agent_data=metadata,
-            processing_time=metadata.get('processing_time', 0),
-            retry_count=0
-        )
-
-        # Show results
-        context_after = context_manager.context
-        context_after_length = len(context_after)
-        added_length = context_after_length - context_before_length
-
-        print(f"Context processing status: {'Successful' if context_success else 'Failed'}")
-        print(f"Context growth: {context_before_length} → {context_after_length} (+{added_length} characters)")
-
-        # Show what was actually added
-        if context_before:
-            added_content = context_after[len(context_before):].strip()
-            print(f"Added to context ({len(added_content)} characters):")
-            print(f"   {added_content}")
-        else:
-            print(f"Initial context created ({len(context_after)} characters):")
-            print(f"   {context_after}")
-
-        print("\nCurrent Session Statistics:")
-        print(f"   Total iterations: {len(context_manager.context_history)}")
-        print(f"   Total context length: {len(context_manager.context)}")
-        print(f"   Compression events: {context_manager.compression_count}")
+        # # Get context before adding this iteration
+        # context_before = context_manager.context
+        # context_before_length = len(context_before)
+        #
+        # # Add to context manager (triggers: summarize → emotion → append)
+        # print("\nProcessing through Context Manager...")
+        # print("   Step 1: Summarizing orchestrator response...")
+        # print("   Step 2: Adding emotional enhancement...")
+        # print("   Step 3: Appending to context...")
+        #
+        # context_success = context_manager.add_iteration_result(
+        #     iteration_num=iteration,
+        #     response=orchestrator_response,
+        #     agent_data=metadata,
+        #     processing_time=metadata.get('processing_time', 0),
+        #     retry_count=0
+        # )
+        #
+        # # Show results
+        # context_after = context_manager.context
+        # context_after_length = len(context_after)
+        # added_length = context_after_length - context_before_length
+        #
+        # print(f"Context processing status: {'Successful' if context_success else 'Failed'}")
+        # print(f"Context growth: {context_before_length} → {context_after_length} (+{added_length} characters)")
+        #
+        # # Show what was actually added
+        # if context_before:
+        #     added_content = context_after[len(context_before):].strip()
+        #     print(f"Added to context ({len(added_content)} characters):")
+        #     print(f"   {added_content}")
+        # else:
+        #     print(f"Initial context created ({len(context_after)} characters):")
+        #     print(f"   {context_after}")
+        #
+        # print("\nCurrent Session Statistics:")
+        # print(f"   Total iterations: {len(context_manager.context_history)}")
+        # print(f"   Total context length: {len(context_manager.context)}")
+        # print(f"   Compression events: {context_manager.compression_count}")
 
     # Final summary
     print("\nFinal Context Summary")

@@ -190,7 +190,7 @@ class ContextManager:
             self._update_context(iteration_data)
 
             # Collect advanced analytics
-            self._collect_advanced_metrics(iteration_data, iteration_num)
+            #self._collect_advanced_metrics(iteration_data, iteration_num)
 
             # Save updated data
             self._save_context_data()
@@ -312,8 +312,7 @@ class ContextManager:
             current_length = len(self.context) + len(str(new_iteration_data))
 
             if current_length > Config.CONTEXT_COMPRESSION_THRESHOLD:
-                self.context = self.context + "\n\n" + new_iteration_data['response']
-                self._trigger_full_summarization()
+                self._trigger_full_summarization(new_iteration_data['response'])
             else:
                 self._incremental_context_update(new_iteration_data)
 
@@ -345,7 +344,7 @@ class ContextManager:
 
             if success and response:
                 # Step 2: Add tiny emotion to the summary
-                summary = extract_text_from_response(response)
+                summary = extract_text_from_response(response, not_context=False, agent_name='inc_context', session_dir=self.session_dir)
                 enhanced_summary = self._apply_minimal_emotion_to_new_content(summary)
 
                 # Step 3: Append to whole context
@@ -361,18 +360,31 @@ class ContextManager:
         except Exception as e:
             self.logger.error(f"Failed to update context summary: {e}")
 
-    def _trigger_full_summarization(self):
+    def _trigger_full_summarization(self, new_response: str):
         """Perform full context summarization when length exceeds threshold"""
         try:
             self.compression_count += 1
             self.session_metrics["session_analytics"]["context_compressions"] = self.compression_count
 
             prompt = f"""Summarize this context for an agent, as it got too long for him.
+            This summarization is the most important step in multi agent process,
+            as this is all of their context for communicating and working together.
+            You have to intelligently summarize the context to keep the most important insights - 
+            Planning, and situations and progress are very fundamental to keep, as well as the goal of the process of course.
+            try to summarize in the most effective way, that the agents could understand what happened and observe the important insights, 
+            while keeping it all in very concise  and efficient way. (maybe if you have to, u cn spik lk dis, or find other ways to be efficient and effective)
+            You may see different iteration numbers for different agents. try to follow that, 
+            knowing that for the researcher for example can be a different iteration number than the orchestrator..
+            KEY THING TO KNOW - you are provided with the full context, and also the most recent iteration. The difference is - the recent
+            iteration is not SUMMARIZED AT ALL. meaning it will require much more summarization then the full context that has already been summarized 
+            (though you of course can summarize it as well if needed)
             Note that you need to speak as if you were the agent, so use 'I' and 'my' in your summary.
             You are given his full context and need to summarize it to keep the most important insights
-            Return only the summary, do not include any other text.
+            Return only your summary, do not include any thoughts of yours or things like that.
             
-            **Full Session Context**: {self.context}
+            **Full Session Context**: {self.context} @!@ **END OF CONTEXT** @!@
+            **Most Recent Iteration (not summarized)**: {new_response} END OF MOST RECENT ITERATION
+            
 
             """
 
@@ -385,7 +397,7 @@ class ContextManager:
             )
 
             if success and response:
-                self.context = extract_text_from_response(response)
+                self.context = extract_text_from_response(response, not_context=False, agent_name='full__context_summarization', session_dir=self.session_dir)
                 self.logger.info(f"Full context summarization completed (compression #{self.compression_count})")
             else:
                 self.logger.error("Full summarization failed, keeping current context")
@@ -449,7 +461,7 @@ class ContextManager:
 
             if success and response:
                 try:
-                    metrics_text = extract_text_from_response(response)
+                    metrics_text = extract_text_from_response(response, not_context=False, session_dir=self.session_dir)
                     # Extract JSON from response
                     import re
                     json_match = re.search(r'\{[^}]+\}', metrics_text)
@@ -569,7 +581,7 @@ class ContextManager:
             )
 
             if success and response:
-                enhanced = extract_text_from_response(response)
+                enhanced = extract_text_from_response(response, not_context=False, agent_name='emotion_enhancer', session_dir=self.session_dir)
                 # Safety check - if enhanced version is much longer, use original
                 if len(enhanced) > len(new_content) * 1.2:
                     self.logger.warning("Emotional enhancement expanded content too much, using original")
@@ -622,7 +634,6 @@ class ContextManager:
                 "timestamp": datetime.now().isoformat(),
                 "raw_context_history": self.context_history,
                 "context": self.context,
-                "full_narrative": self._build_full_narrative(),
                 "metrics_at_snapshot": self.session_metrics,
                 "compression_count": self.compression_count
             }

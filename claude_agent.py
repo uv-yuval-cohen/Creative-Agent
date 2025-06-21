@@ -20,6 +20,7 @@ class ClaudeAgentManager:
         self.session_dir = session_dir
         self.logger = logging.getLogger(__name__)
         self.context_manager = context_manager
+        self.plan = "no plan yet"
 
         # Initialize Claude client
         try:
@@ -46,6 +47,8 @@ class ClaudeAgentManager:
         """
         agent_name = "orchestrator"
         start_time = time.time()
+        if current_iteration == 8:
+            current_iteration = "8 THIS IS FINAL ITERATION!!!! TIME TO FINALIZE THE PROJECT!!!"
 
         try:
             self.logger.info(f"Creating orchestrator for iteration {current_iteration}")
@@ -72,7 +75,7 @@ class ClaudeAgentManager:
             processing_time = time.time() - start_time
 
             if success and response:
-                response_text = extract_text_from_response(response)
+                response_text = extract_text_from_response(response, agent_name=agent_name, iteration=current_iteration, session_dir=self.session_dir)
 
                 # Validate response format
                 is_valid, error_msg, parsed_data = validate_agent_response_format(response_text)
@@ -93,6 +96,9 @@ class ClaudeAgentManager:
                         return None, False, {"error": "Format validation failed after retry",
                                              "processing_time": processing_time}
 
+                if 'plan' in parsed_data:
+                    self.plan = parsed_data['plan']
+
                 self.logger.info(f"Processing complete orchestrator reply for iteration {current_iteration}")
 
                 self.context_manager.process_orchestrator_reply(
@@ -100,6 +106,13 @@ class ClaudeAgentManager:
                     orchestrator_response=response_text,
                     parsed_data=parsed_data
                 )
+
+                if current_iteration == 8:
+                    return response_text, True, {
+                        "agent_name": agent_name,
+                        "processing_time": processing_time,
+                        "iteration": current_iteration
+                    }
 
                 # need to execute the orchestrator reply
                 if parsed_data['type'] == 'agent':
@@ -204,7 +217,7 @@ class ClaudeAgentManager:
             )
 
             if success and response:
-                response_text = extract_text_from_response(response)
+                response_text = extract_text_from_response(response, agent_name='orchestrator', iteration=iteration, session_dir=self.session_dir)
                 is_valid, _, _ = validate_agent_response_format(response_text)
 
                 if is_valid:
@@ -263,7 +276,7 @@ class ClaudeAgentManager:
                 processing_time = time.time() - start_time
 
                 if success and response:
-                    response_text = extract_text_from_response(response)
+                    response_text = extract_text_from_response(response, agent_name='research_conductor', iteration=iteration_num, session_dir=self.session_dir)
                     # Validate response format
                     is_valid, error_msg, parsed_data = validate_agent_response_format(response_text, agent_type='researcher')
 
@@ -324,9 +337,12 @@ class ClaudeAgentManager:
             # Build system prompt for synthesis
             synthesis_prompt = Config.AGENT_PROMPTS["researcher"].format(
                 subject=self.context_manager.subject,
-                current_iteration="SYNTHESIS",
+                current_iteration=4,
                 context_summary=self.context_manager.context,
-                agent_instructions=agent_instructions
+                agent_instructions=agent_instructions,
+                chose_web_searcher=chose_web_searcher,
+                chose_philosopher=chose_philosopher,
+                chose_perspective=chose_perspective
             )
 
             # Execute synthesis
@@ -342,25 +358,10 @@ class ClaudeAgentManager:
             processing_time = time.time() - start_time
 
             if success and response:
-                response_text = extract_text_from_response(response)
+                response_text = extract_text_from_response(response, agent_name='researcher', iteration=4, session_dir=self.session_dir)
                 # Validate response format
                 is_valid, error_msg, parsed_data = validate_agent_response_format(response_text, agent_type='researcher')
 
-                if not is_valid:
-                    self.logger.warning(f"Synthesis format invalid: {error_msg}")
-
-                    # Attempt retry with format correction
-                    retry_response = self._retry_with_format_correction(
-                        synthesis_prompt, error_msg, current_iteration
-                    )
-
-                    if retry_response:
-                        response_text = retry_response
-                        is_valid = True
-                    else:
-                        self._update_agent_stats(agent_name, processing_time, failed=True)
-                        return None, False, {"error": "Synthesis format validation failed after retry",
-                                             "processing_time": processing_time}
 
                 context_update_success = self.context_manager.add_iteration_result(
                     iteration_num=4,
@@ -426,7 +427,7 @@ class ClaudeAgentManager:
             # Configure reasoning
             thinking_config = {
                 "type": "enabled",
-                "budget_tokens": 8000
+                "budget_tokens": 3000
             }
 
             # Execute engineer
@@ -434,7 +435,7 @@ class ClaudeAgentManager:
                 self.client.messages.create,
                 model=Config.MODEL_NAME,
                 max_tokens=Config.MAX_TOKENS,
-                temperature=Config.TEMPERATURE,
+                temperature=1,
                 system=system_prompt,
                 thinking=thinking_config,
                 messages=[{"role": "user", "content": "Please provide your engineering analysis and recommendations."}]
@@ -443,7 +444,7 @@ class ClaudeAgentManager:
             processing_time = time.time() - start_time
 
             if success and response:
-                response_text = extract_text_from_response(response)
+                response_text = extract_text_from_response(response, agent_name=agent_name, iteration=current_iteration, session_dir=self.session_dir)
 
                 self._update_agent_stats(agent_name, processing_time, failed=False)
 
@@ -502,7 +503,7 @@ class ClaudeAgentManager:
             processing_time = time.time() - start_time
 
             if success and response:
-                response_text = extract_text_from_response(response)
+                response_text = extract_text_from_response(response, agent_name='evaluator', iteration=current_iteration, session_dir=self.session_dir)
 
                 self._update_agent_stats(agent_name, processing_time, failed=False)
 
@@ -584,7 +585,7 @@ class ClaudeAgentManager:
             )
 
             if success and response:
-                response_text = extract_text_from_response(response)
+                response_text = extract_text_from_response(response, agent_name='web_searcher', session_dir=self.session_dir)
                 response_dict = {
                     'response' : response_text
                 }
@@ -629,7 +630,7 @@ class ClaudeAgentManager:
             )
 
             if success and response:
-                response_text = extract_text_from_response(response)
+                response_text = extract_text_from_response(response, agent_name='philosopher', session_dir=self.session_dir)
                 response_dict = {
                     'response': response_text
                 }
@@ -680,7 +681,7 @@ class ClaudeAgentManager:
             )
 
             if success and response:
-                response_text = extract_text_from_response(response)
+                response_text = extract_text_from_response(response,agent_name=f'perspective_{person}', session_dir=self.session_dir)
                 response_dict = {
                     'response': response_text
                 }
